@@ -14,6 +14,10 @@ PadStruct = namedtuple('PadStruct',
                        ['pad_up', 'pad_down', 'pad_right', 'pad_left'])
 
 
+def homography_apply(homography, src_image, shape):
+    pass
+
+
 class Solution:
     """Implement Projective Homography and Panorama Solution."""
     def __init__(self):
@@ -70,7 +74,7 @@ class Solution:
             The forward homography of the source image to its destination.
         """
         # return new_image
-        new_img = np.zeros_like(dst_image)
+        new_img = np.zeros(dst_image_shape)
         for j in range(src_image.shape[0]):
             for i in range(src_image.shape[1]):
                 c = src_image[j][i]
@@ -81,7 +85,7 @@ class Solution:
                 new_index[0] = max(min(new_index[0],dst_image_shape[1]-1),0)
                 new_index[1] = max(min(new_index[1],dst_image_shape[0]-1),0)
                 new_img[new_index[1],[new_index[0]]] = c
-        return new_img
+        return new_img.astype('int')
     
     @staticmethod
     def compute_forward_homography_fast(
@@ -120,10 +124,10 @@ class Solution:
         dst_grid[1,:] = dst_grid[1,:].clip(min=0,max=dst_image_shape[0]-1)
         grid = grid.reshape((3,src_image.shape[0],src_image.shape[1])).astype('int')
         dst_grid_r = dst_grid.reshape((3,src_image.shape[0],src_image.shape[1]))
-        new_img = np.zeros_like(dst_image)
+        new_img = np.zeros(dst_image_shape)
         new_img[dst_grid_r[1],dst_grid_r[0]]= src_image[grid[1],grid[0]]
         
-        return new_img
+        return new_img.astype('int')
 
     @staticmethod
     def test_homography(homography: np.ndarray,
@@ -226,18 +230,21 @@ class Solution:
         n = 4
         # number of RANSAC iterations (+1 to avoid the case where w=1)
         k = int(np.ceil(np.log(1 - p) / np.log(1 - w ** n))) + 1
-        
+
+        best_model = None
         best_mse = np.inf
         for i in range(k):
             r_c_points = np.random.choice(range(match_p_src.shape[1]),size=n,replace=False)
-            H = compute_homography_naive(match_p_src[:,r_c_points],match_p_dst[:,r_c_points])
-            in_prob,mse= test_homography(H,match_p_src,match_p_dst,max_err)
+            H = self.compute_homography_naive(match_p_src[:,r_c_points],match_p_dst[:,r_c_points])
+            in_prob,mse= self.test_homography(H,match_p_src,match_p_dst,max_err)
             if in_prob > d:
                 if mse < best_mse:
                     best_mse=mse
-                    meet_points = meet_the_model_points(H,match_p_src,match_p_dst,max_err)
-                    best_model = compute_homography_naive(*meet_points)
-        
+                    meet_points = self.meet_the_model_points(H,match_p_src,match_p_dst,max_err)
+                    best_model = self.compute_homography_naive(*meet_points)
+        if best_model is None:
+            raise Exception('No model produced')
+
         return best_model
 
 
@@ -268,8 +275,36 @@ class Solution:
         """
 
         # return backward_warp
-        """INSERT YOUR CODE HERE"""
-        pass
+
+        def homography_apply(homography, src_image, dst_image_shape):
+            xv, yv = np.meshgrid(range(src_image.shape[1]), range(src_image.shape[0]), sparse=False, indexing='xy')
+            grid = np.vstack([xv.flatten(), yv.flatten(), np.ones(src_image.shape[0] * src_image.shape[1])])
+            dst_grid = np.dot(homography, grid)
+            dst_grid = dst_grid / dst_grid[2, :]
+            dst_grid = dst_grid.astype('int')
+            dst_grid[0, :] = dst_grid[0, :].clip(min=0, max=dst_image_shape[1] - 1)
+            dst_grid[1, :] = dst_grid[1, :].clip(min=0, max=dst_image_shape[0] - 1)
+            grid = grid.reshape((3, src_image.shape[0], src_image.shape[1])).astype('int')
+            dst_grid_r = dst_grid.reshape((3, src_image.shape[0], src_image.shape[1]))
+            return dst_grid_r
+
+        def bilinear(im, xv_s, xv_d, yv_s, yv_d):
+            ix = xv_s.flatten()
+            iy = yv_s.flatten()
+            samples = im[iy, ix]
+            return griddata((iy, ix), samples, (xv_d, yv_d))
+
+        dst_grid = homography_apply(backward_projective_homography,src_image,dst_image_shape)
+
+        xv_d,yv_d = dst_grid[1],dst_grid[0]
+
+        xv_s, yv_s = np.meshgrid(range(src_image.shape[1]), range(src_image.shape[0]), sparse=False, indexing='xy')
+
+        int_im = bilinear(src_image, xv_s, xv_d, yv_s, yv_d)
+        
+        return int_im
+        
+
 
     @staticmethod
     def find_panorama_shape(src_image: np.ndarray,
