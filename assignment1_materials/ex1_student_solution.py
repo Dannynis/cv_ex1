@@ -277,22 +277,21 @@ class Solution:
         # return backward_warp
 
         def homography_apply(homography, src_image, dst_image_shape):
-            xv, yv = np.meshgrid(range(src_image.shape[1]), range(src_image.shape[0]), sparse=False, indexing='xy')
-            grid = np.vstack([xv.flatten(), yv.flatten(), np.ones(src_image.shape[0] * src_image.shape[1])])
+            xv, yv = np.meshgrid(range(dst_image_shape[1]), range(dst_image_shape[0]), sparse=False, indexing='xy')
+            grid = np.vstack([xv.flatten(), yv.flatten(), np.ones(dst_image_shape[0] * dst_image_shape[1])])
             dst_grid = np.dot(homography, grid)
             dst_grid = dst_grid / dst_grid[2, :]
             dst_grid = dst_grid.astype('int')
             dst_grid[0, :] = dst_grid[0, :].clip(min=0, max=dst_image_shape[1] - 1)
             dst_grid[1, :] = dst_grid[1, :].clip(min=0, max=dst_image_shape[0] - 1)
-            grid = grid.reshape((3, src_image.shape[0], src_image.shape[1])).astype('int')
-            dst_grid_r = dst_grid.reshape((3, src_image.shape[0], src_image.shape[1]))
+            dst_grid_r = dst_grid.reshape((3, dst_image_shape[0], dst_image_shape[1]))
             return dst_grid_r
 
         def bilinear(im, xv_s, xv_d, yv_s, yv_d):
             ix = xv_s.flatten()
             iy = yv_s.flatten()
             samples = im[iy, ix]
-            return griddata((iy, ix), samples, (xv_d, yv_d))
+            return griddata((iy, ix), samples, (xv_d, yv_d), method='cubic')
 
         dst_grid = homography_apply(backward_projective_homography,src_image,dst_image_shape)
 
@@ -395,8 +394,10 @@ class Solution:
             translation.
         """
         # return final_homography
-        """INSERT YOUR CODE HERE"""
-        pass
+        trans_mat = np.vstack([[1,0,pad_left],[0,1,pad_up],[0,0,1]])
+        translated_homography = backward_homography @ trans_mat
+        translated_homography = translated_homography / np.linalg.norm(translated_homography)
+        return translated_homography
 
     def panorama(self,
                  src_image: np.ndarray,
