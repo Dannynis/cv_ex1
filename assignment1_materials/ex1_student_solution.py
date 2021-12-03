@@ -362,8 +362,9 @@ class Solution:
                 # pad down
                 pad_down = max([pad_down,
                                 corner_location[1] - dst_rows_num])
-        panorama_cols_num = int(dst_cols_num + pad_right + pad_left)
-        panorama_rows_num = int(dst_rows_num + pad_up + pad_down)
+        ## fixing bug
+        panorama_cols_num = int(dst_cols_num) + int(pad_right) + int(pad_left)
+        panorama_rows_num = int(dst_rows_num) + int(pad_up) + int(pad_down)
         pad_struct = PadStruct(pad_up=int(pad_up),
                                pad_down=int(pad_down),
                                pad_left=int(pad_left),
@@ -447,6 +448,8 @@ class Solution:
 
         img_panorama = self.compute_backward_mapping(translated_back_h,src_image,( r,c,3))
 
-        img_panorama[padding.pad_up:img_panorama.shape[0]-padding.pad_down-1,padding.pad_left:img_panorama.shape[1]-padding.pad_right] = dst_image
+        img_panorama[padding.pad_up:img_panorama.shape[0] - padding.pad_down,
+        padding.pad_left:img_panorama.shape[1] - padding.pad_right] = dst_image
 
-        return img_panorama.astype('int')
+
+        return np.clip(img_panorama, 0, 255).astype(np.uint8)
