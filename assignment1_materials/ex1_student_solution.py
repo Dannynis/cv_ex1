@@ -282,8 +282,6 @@ class Solution:
             dst_grid = np.dot(homography, grid)
             dst_grid = dst_grid / dst_grid[2, :]
             dst_grid = dst_grid.astype('int')
-            dst_grid[0, :] = dst_grid[0, :].clip(min=0, max=dst_image_shape[1] - 1)
-            dst_grid[1, :] = dst_grid[1, :].clip(min=0, max=dst_image_shape[0] - 1)
             dst_grid_r = dst_grid.reshape((3, dst_image_shape[0], dst_image_shape[1]))
             return dst_grid_r
 
@@ -394,7 +392,7 @@ class Solution:
             translation.
         """
         # return final_homography
-        trans_mat = np.vstack([[1,0,pad_left],[0,1,pad_up],[0,0,1]])
+        trans_mat = np.vstack([[1,0,-pad_left],[0,1,-pad_up],[0,0,1]])
         translated_homography = backward_homography @ trans_mat
         translated_homography = translated_homography / np.linalg.norm(translated_homography)
         return translated_homography
@@ -439,5 +437,16 @@ class Solution:
 
         """
         # return np.clip(img_panorama, 0, 255).astype(np.uint8)
-        """INSERT YOUR CODE HERE"""
-        pass
+        h = self.compute_homography(match_p_src,match_p_dst,inliers_percent,max_err)
+
+        back_h = np.linalg.inv(h)
+
+        r,c,padding = self.find_panorama_shape(src_image, dst_image, h)
+
+        translated_back_h = self.add_translation_to_backward_homography(back_h,pad_left=padding.pad_left,pad_up=padding.pad_up)
+
+        img_panorama = self.compute_backward_mapping(translated_back_h,src_image,( r,c,3))
+
+        img_panorama[padding.pad_up:img_panorama.shape[0]-padding.pad_down-1,padding.pad_left:img_panorama.shape[1]-padding.pad_right] = dst_image
+
+        return img_panorama.astype('int')
